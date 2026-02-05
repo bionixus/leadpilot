@@ -47,7 +47,7 @@ export default async function DashboardLayout({
       {!userData && <OnboardTrigger />}
       <aside className="w-64 bg-white border-r flex flex-col fixed h-full">
         <div className="p-4 border-b">
-          <Link href="/" className="flex items-center gap-2">
+          <Link href="/campaigns" className="flex items-center gap-2">
             <div className="w-8 h-8 bg-primary rounded-lg flex items-center justify-center">
               <Zap className="w-5 h-5 text-white" />
             </div>
@@ -57,7 +57,7 @@ export default async function DashboardLayout({
         <nav className="flex-1 p-4 space-y-1">
           <NavLink href="/agent" icon={<Bot className="w-5 h-5" />}>Agent</NavLink>
           <NavLink href="/autopilot" icon={<Sparkles className="w-5 h-5" />}>Autopilot</NavLink>
-          <NavLink href="/" icon={<LayoutDashboard className="w-5 h-5" />}>Campaigns</NavLink>
+          <NavLink href="/campaigns" icon={<LayoutDashboard className="w-5 h-5" />}>Campaigns</NavLink>
           <NavLink href="/analytics" icon={<BarChart3 className="w-5 h-5" />}>Analytics</NavLink>
           <NavLink href="/leads" icon={<Users className="w-5 h-5" />}>Leads</NavLink>
           <NavLink href="/scraping" icon={<Search className="w-5 h-5" />}>Scraping</NavLink>

@@ -2,7 +2,7 @@ import Link from 'next/link';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { Plus, Users, Mail, MessageSquare } from 'lucide-react';
 import { formatDate, formatNumber, percentage } from '@/lib/utils';
-import { CampaignRowActions } from './CampaignRowActions';
+import { CampaignRowActions } from '../CampaignRowActions';
 
 export const metadata = { title: 'Campaigns' };
 
