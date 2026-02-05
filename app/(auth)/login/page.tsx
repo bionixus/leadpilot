@@ -21,7 +21,7 @@ export default async function LoginPage({
     try {
       const supabase = await createServerSupabaseClient();
       const { data: { user } } = await supabase.auth.getUser();
-      if (user) redirect('/');
+      if (user) redirect('/campaigns');
     } catch {
       // Supabase not configured
     }

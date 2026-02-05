@@ -28,7 +28,7 @@ export function LoginForm() {
         return;
       }
       router.refresh();
-      router.push('/');
+      router.push('/campaigns');
     } catch {
       setError('Something went wrong. Please try again.');
     } finally {

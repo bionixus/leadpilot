@@ -54,7 +54,7 @@ export function SignUpForm() {
           return;
         }
         router.refresh();
-        router.push('/');
+        router.push('/campaigns');
         return;
       }
       setEmailSent(true);

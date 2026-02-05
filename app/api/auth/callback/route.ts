@@ -10,7 +10,7 @@ import { ensureUserAndOrg } from '@/lib/supabase/ensure-user-org';
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
-  const next = searchParams.get('next') ?? '/';
+  const next = searchParams.get('next') ?? '/campaigns';
 
   const baseUrl = request.nextUrl.origin;
   const loginUrl = new URL('/login', baseUrl);
