@@ -1,7 +1,18 @@
-import { type NextRequest } from 'next/server';
+import { type NextRequest, NextResponse } from 'next/server';
 import { updateSession } from '@/lib/supabase/middleware';
 
+// Public routes that don't require authentication
+const publicRoutes = ['/', '/login', '/signup', '/forgot-password', '/reset-password'];
+
 export async function middleware(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  
+  // Skip middleware for public routes - allow them without any auth processing
+  if (publicRoutes.includes(pathname)) {
+    return NextResponse.next();
+  }
+  
+  // For all other routes, update the session
   return await updateSession(request);
 }
 
