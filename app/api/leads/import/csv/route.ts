@@ -43,7 +43,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: limitCheck.reason }, { status: 403 });
   }
 
-  // @ts-expect-error Supabase Insert type inference
   const { data, error } = await supabase.from('leads').insert(rows).select();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ imported: data?.length ?? 0, leads: data });

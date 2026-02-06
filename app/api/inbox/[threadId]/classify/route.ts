@@ -16,7 +16,6 @@ export async function PATCH(
 
   const { data, error } = await supabase
     .from('inbox_messages')
-    // @ts-expect-error Supabase Update type inference
     .update({ classification: classification ?? null })
     .eq('id', message_id)
     .eq('thread_id', threadId)

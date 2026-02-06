@@ -25,7 +25,6 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  // @ts-expect-error Supabase Update type inference
   const { data, error } = await supabase.from('leads').update(body).eq('id', id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
