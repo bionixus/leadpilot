@@ -20,7 +20,7 @@ export function SettingsForm({ initialName, initialBusinessContext }: SettingsFo
   const [message, setMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
 
   function updateCtx<K extends keyof BusinessContext>(key: K, value: BusinessContext[K]) {
-    setCtx((prev) => ({ ...prev, [key]: value }));
+    setCtx((prev: typeof ctx) => ({ ...prev, [key]: value }));
   }
 
   async function handleSubmit(e: React.FormEvent) {
