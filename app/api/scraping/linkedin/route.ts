@@ -1,6 +1,7 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { startActor, ACTOR_IDS } from '@/lib/apify';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 type UserRow = { id: string; org_id: string | null };
 
@@ -8,6 +9,11 @@ export async function POST(request: Request) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const rl = checkRateLimit(`${user.id}:scraping`, { windowMs: 60_000, maxRequests: 10 });
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.retryAfterMs || 60000) / 1000)) } });
+  }
 
   const { data: userRow } = await supabase
     .from('users')

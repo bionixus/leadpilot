@@ -1,5 +1,16 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const createTaskSchema = z.object({
+  task_type: z.string().min(1),
+  input_data: z.record(z.unknown()).optional(),
+  priority: z.number().int().min(0).max(100).optional(),
+  lead_id: z.string().uuid().optional().nullable(),
+  campaign_id: z.string().uuid().optional().nullable(),
+  scheduled_for: z.string().datetime().optional(),
+  requires_approval: z.boolean().optional(),
+});
 
 // GET - List tasks
 export async function GET(request: Request) {
@@ -66,9 +77,9 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-
-  if (!body.task_type) {
-    return NextResponse.json({ error: 'task_type is required' }, { status: 400 });
+  const parsed = createTaskSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
 
   // Get agent config
@@ -85,13 +96,13 @@ export async function POST(request: Request) {
     .insert({
       org_id: userTyped.org_id,
       agent_config_id: configTyped?.id,
-      task_type: body.task_type,
-      priority: body.priority ?? 0,
-      input_data: body.input_data ?? {},
-      requires_approval: body.requires_approval ?? false,
-      scheduled_for: body.scheduled_for ?? new Date().toISOString(),
-      campaign_id: body.campaign_id,
-      lead_id: body.lead_id,
+      task_type: parsed.data.task_type,
+      priority: parsed.data.priority ?? 0,
+      input_data: parsed.data.input_data ?? {},
+      requires_approval: parsed.data.requires_approval ?? false,
+      scheduled_for: parsed.data.scheduled_for ?? new Date().toISOString(),
+      campaign_id: parsed.data.campaign_id,
+      lead_id: parsed.data.lead_id,
       status: 'pending',
     } as never)
     .select()

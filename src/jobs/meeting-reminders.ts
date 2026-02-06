@@ -94,13 +94,12 @@ Looking forward to speaking with you!
 Best regards`;
 
   // Queue the reminder email
-  await supabase.from('messages').insert({
+  await supabase.from('emails').insert({
     org_id: meeting.org_id,
     lead_id: meeting.lead_id,
-    channel: 'email',
     step: 0,
     subject,
-    body_text: body,
+    body,
     scheduled_for: new Date().toISOString(),
     status: 'scheduled',
   });
@@ -136,13 +135,12 @@ ${meeting.meeting_link ? `🔗 Join here: ${meeting.meeting_link}` : ''}
 
 See you soon!`;
 
-  await supabase.from('messages').insert({
+  await supabase.from('emails').insert({
     org_id: meeting.org_id,
     lead_id: meeting.lead_id,
-    channel: 'email',
     step: 0,
     subject,
-    body_text: body,
+    body,
     scheduled_for: new Date().toISOString(),
     status: 'scheduled',
   });

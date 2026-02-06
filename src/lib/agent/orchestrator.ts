@@ -250,11 +250,11 @@ export class AgentOrchestrator {
 
     // Check if any campaigns need follow-ups
     const { data: pendingFollowUps } = await this.supabase
-      .from('messages')
+      .from('emails')
       .select('*, leads(*)')
       .eq('org_id', this.orgId)
       .eq('status', 'sent')
-      .lt('scheduled_for', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString())
+      .lt('sent_at', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString())
       .limit(10);
 
     for (const message of (pendingFollowUps as Array<{ lead_id: string; id: string }>) || []) {

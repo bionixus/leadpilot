@@ -1,5 +1,18 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const createRuleSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(1000).optional(),
+  rule_type: z.enum(['filter', 'constraint', 'escalation', 'automation']),
+  condition: z.string().min(1),
+  condition_json: z.record(z.unknown()).optional(),
+  action: z.string().min(1),
+  action_json: z.record(z.unknown()).optional(),
+  priority: z.number().int().min(0).max(100).optional(),
+  is_enabled: z.boolean().optional(),
+});
 
 // GET - List rules
 export async function GET() {
@@ -50,13 +63,9 @@ export async function POST(request: Request) {
   }
 
   const body = await request.json();
-
-  // Validate required fields
-  if (!body.name || !body.rule_type || !body.condition || !body.action) {
-    return NextResponse.json(
-      { error: 'name, rule_type, condition, and action are required' },
-      { status: 400 }
-    );
+  const parsed = createRuleSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
 
   // Get agent config ID
@@ -73,15 +82,9 @@ export async function POST(request: Request) {
     .insert({
       org_id: userTyped.org_id,
       agent_config_id: configTyped?.id,
-      name: body.name,
-      description: body.description,
-      rule_type: body.rule_type,
-      condition: body.condition,
-      condition_json: body.condition_json,
-      action: body.action,
-      action_json: body.action_json,
-      priority: body.priority ?? 0,
-      is_enabled: body.is_enabled ?? true,
+      ...parsed.data,
+      priority: parsed.data.priority ?? 0,
+      is_enabled: parsed.data.is_enabled ?? true,
     } as never)
     .select()
     .single();

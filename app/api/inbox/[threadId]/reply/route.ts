@@ -1,6 +1,14 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
 import { sendEmail, generateMessageId } from '@/lib/email/send';
+import { checkRateLimit } from '@/lib/rate-limit';
+import { z } from 'zod';
+
+const replySchema = z.object({
+  body: z.string().min(1).max(50000),
+  subject: z.string().max(500).optional(),
+  to_email: z.string().email(),
+});
 
 type InboxMessageRow = {
   id: string;
@@ -23,16 +31,22 @@ export async function POST(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
+  const rl = checkRateLimit(`${user.id}:inbox-reply`, { windowMs: 60_000, maxRequests: 30 });
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.retryAfterMs || 60000) / 1000)) } });
+  }
+
   // Get org_id
   const { data: userRow } = await supabase.from('users').select('org_id').eq('auth_id', user.id).single();
   const orgId = (userRow as { org_id?: string | null } | null)?.org_id;
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 403 });
 
   const body = await request.json();
-  const { body: replyBody, subject: customSubject, to_email } = body ?? {};
-  if (!replyBody || !to_email) {
-    return NextResponse.json({ error: 'body and to_email required' }, { status: 400 });
+  const parsed = replySchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Invalid input', details: parsed.error.flatten() }, { status: 400 });
   }
+  const { body: replyBody, subject: customSubject, to_email } = parsed.data;
 
   // Fetch thread messages to get context
   const { data: messagesData, error: fetchErr } = await supabase

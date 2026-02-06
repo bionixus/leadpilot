@@ -1,6 +1,7 @@
 import Imap from 'imap';
 import { simpleParser, ParsedMail, AddressObject } from 'mailparser';
 import { decrypt } from '@/lib/encryption';
+import { getValidOAuthToken } from '@/lib/email/oauth';
 
 export type EmailAccountForFetch = {
   id: string;
@@ -44,71 +45,6 @@ function buildXOAuth2Token(email: string, accessToken: string): string {
 }
 
 /**
- * Get a valid OAuth access token, refreshing if needed.
- */
-async function getValidAccessToken(account: EmailAccountForFetch): Promise<string> {
-  const accessEnc = account.oauth_access_token_encrypted;
-  const expiresAt = account.oauth_token_expires_at;
-
-  // Check if we have a valid token
-  if (accessEnc) {
-    const now = new Date();
-    const expires = expiresAt ? new Date(expiresAt) : null;
-    // Add 60s buffer
-    if (!expires || expires > new Date(now.getTime() + 60_000)) {
-      try {
-        return decrypt(accessEnc);
-      } catch {
-        // Decryption failed, try refresh
-      }
-    }
-  }
-
-  // Need to refresh
-  const refreshEnc = account.oauth_refresh_token_encrypted;
-  if (!refreshEnc) throw new Error('No refresh token available');
-
-  const refreshToken = decrypt(refreshEnc);
-  const clientId =
-    account.provider === 'gmail'
-      ? process.env.GOOGLE_CLIENT_ID
-      : process.env.MICROSOFT_CLIENT_ID;
-  const clientSecret =
-    account.provider === 'gmail'
-      ? process.env.GOOGLE_CLIENT_SECRET
-      : process.env.MICROSOFT_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) throw new Error('OAuth not configured');
-
-  const tokenUrl =
-    account.provider === 'gmail'
-      ? 'https://oauth2.googleapis.com/token'
-      : 'https://app.microsoftonline.com/common/oauth2/v2.0/token';
-
-  const res = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Token refresh failed: ${errText}`);
-  }
-
-  const tokens = (await res.json()) as { access_token?: string };
-  const accessToken = tokens.access_token;
-  if (!accessToken) throw new Error('No access token in refresh response');
-
-  return accessToken;
-}
-
-/**
  * Extract address from mailparser AddressObject.
  */
 function extractAddresses(
@@ -135,12 +71,11 @@ function extractAddresses(
 export async function fetchNewEmails(
   account: EmailAccountForFetch
 ): Promise<FetchedEmail[]> {
-  // Imap.Config types require password, but xoauth2 can replace it
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let imapConfig: any;
 
   if (account.provider === 'gmail') {
-    const accessToken = await getValidAccessToken(account);
+    const accessToken = await getValidOAuthToken(account);
     const xoauth2 = buildXOAuth2Token(account.email_address, accessToken);
 
     imapConfig = {
@@ -153,7 +88,7 @@ export async function fetchNewEmails(
       authTimeout: 10000,
     };
   } else if (account.provider === 'outlook') {
-    const accessToken = await getValidAccessToken(account);
+    const accessToken = await getValidOAuthToken(account);
     const xoauth2 = buildXOAuth2Token(account.email_address, accessToken);
 
     imapConfig = {
@@ -194,6 +129,7 @@ export async function fetchNewEmails(
 
   return new Promise((resolve, reject) => {
     const imap = new Imap(imapConfig);
+    const parsePromises: Promise<void>[] = [];
     const emails: FetchedEmail[] = [];
 
     imap.once('ready', () => {
@@ -207,11 +143,9 @@ export async function fetchNewEmails(
         let searchCriteria: (string | string[])[];
 
         if (account.last_synced_at) {
-          // Fetch emails since last sync
           const since = new Date(account.last_synced_at);
           searchCriteria = [['SINCE', since.toISOString().slice(0, 10)]];
         } else {
-          // First sync: get recent unseen emails
           searchCriteria = ['UNSEEN'];
         }
 
@@ -234,7 +168,7 @@ export async function fetchNewEmails(
             struct: true,
           });
 
-          fetch.on('message', (msg, seqno) => {
+          fetch.on('message', (msg) => {
             let uid = 0;
             let buffer = '';
 
@@ -248,47 +182,53 @@ export async function fetchNewEmails(
               uid = attrs.uid;
             });
 
-            msg.once('end', async () => {
-              try {
-                const parsed: ParsedMail = await simpleParser(buffer);
+            // Collect the parse promise so we can await them all
+            const parsePromise = new Promise<void>((resolveMsg) => {
+              msg.once('end', async () => {
+                try {
+                  const parsed: ParsedMail = await simpleParser(buffer);
 
-                const from = extractAddresses(parsed.from);
-                const to = extractAddresses(parsed.to);
-                const cc = extractAddresses(parsed.cc);
+                  const from = extractAddresses(parsed.from);
+                  const to = extractAddresses(parsed.to);
+                  const cc = extractAddresses(parsed.cc);
 
-                const references: string[] = [];
-                if (parsed.references) {
-                  if (Array.isArray(parsed.references)) {
-                    references.push(...parsed.references);
-                  } else {
-                    references.push(parsed.references);
+                  const references: string[] = [];
+                  if (parsed.references) {
+                    if (Array.isArray(parsed.references)) {
+                      references.push(...parsed.references);
+                    } else {
+                      references.push(parsed.references);
+                    }
                   }
+
+                  const attachments = (parsed.attachments || []).map((att) => ({
+                    filename: att.filename || 'attachment',
+                    mimeType: att.contentType || 'application/octet-stream',
+                    size: att.size || 0,
+                  }));
+
+                  emails.push({
+                    messageId: parsed.messageId || null,
+                    inReplyTo: parsed.inReplyTo || null,
+                    references,
+                    from: from[0] || { address: 'unknown', name: null },
+                    to,
+                    cc,
+                    subject: parsed.subject || null,
+                    bodyText: parsed.text || null,
+                    bodyHtml: parsed.html || null,
+                    date: parsed.date || null,
+                    attachments,
+                    uid,
+                  });
+                } catch (parseErr) {
+                  console.error('Failed to parse email:', parseErr);
+                } finally {
+                  resolveMsg();
                 }
-
-                const attachments = (parsed.attachments || []).map((att) => ({
-                  filename: att.filename || 'attachment',
-                  mimeType: att.contentType || 'application/octet-stream',
-                  size: att.size || 0,
-                }));
-
-                emails.push({
-                  messageId: parsed.messageId || null,
-                  inReplyTo: parsed.inReplyTo || null,
-                  references,
-                  from: from[0] || { address: 'unknown', name: null },
-                  to,
-                  cc,
-                  subject: parsed.subject || null,
-                  bodyText: parsed.text || null,
-                  bodyHtml: parsed.html || null,
-                  date: parsed.date || null,
-                  attachments,
-                  uid,
-                });
-              } catch (parseErr) {
-                console.error('Failed to parse email:', parseErr);
-              }
+              });
             });
+            parsePromises.push(parsePromise);
           });
 
           fetch.once('error', (fetchErr: Error) => {
@@ -297,7 +237,10 @@ export async function fetchNewEmails(
           });
 
           fetch.once('end', () => {
-            imap.end();
+            // Wait for all async parse operations to complete before closing
+            Promise.all(parsePromises).then(() => {
+              imap.end();
+            });
           });
         });
       });

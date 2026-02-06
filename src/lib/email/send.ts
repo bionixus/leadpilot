@@ -1,6 +1,7 @@
 import nodemailer from 'nodemailer';
 import { createSupabaseAdminClient } from '@/lib/supabase/admin';
 import { decrypt } from '@/lib/encryption';
+import { getValidOAuthToken } from '@/lib/email/oauth';
 
 export type SendEmailOptions = {
   accountId: string;
@@ -34,99 +35,6 @@ type EmailAccountRow = {
 };
 
 /**
- * Refresh OAuth access token if expired.
- * Returns the new access token or throws if refresh fails.
- */
-async function refreshOAuthToken(
-  account: EmailAccountRow,
-  supabase: Awaited<ReturnType<typeof createSupabaseAdminClient>>
-): Promise<string> {
-  const refreshEnc = account.oauth_refresh_token_encrypted;
-  if (!refreshEnc) throw new Error('No refresh token available');
-
-  const refreshToken = decrypt(refreshEnc);
-  const clientId =
-    account.provider === 'gmail'
-      ? process.env.GOOGLE_CLIENT_ID
-      : process.env.MICROSOFT_CLIENT_ID;
-  const clientSecret =
-    account.provider === 'gmail'
-      ? process.env.GOOGLE_CLIENT_SECRET
-      : process.env.MICROSOFT_CLIENT_SECRET;
-
-  if (!clientId || !clientSecret) throw new Error('OAuth not configured');
-
-  const tokenUrl =
-    account.provider === 'gmail'
-      ? 'https://oauth2.googleapis.com/token'
-      : 'https://app.microsoftonline.com/common/oauth2/v2.0/token';
-
-  const res = await fetch(tokenUrl, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: clientId,
-      client_secret: clientSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    }),
-  });
-
-  if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Token refresh failed: ${errText}`);
-  }
-
-  const tokens = (await res.json()) as { access_token?: string; expires_in?: number };
-  const accessToken = tokens.access_token;
-  if (!accessToken) throw new Error('No access token in refresh response');
-
-  // Update stored tokens
-  const { encrypt } = await import('@/lib/encryption');
-  const expiresAt = tokens.expires_in
-    ? new Date(Date.now() + tokens.expires_in * 1000).toISOString()
-    : null;
-
-  await supabase
-    .from('email_accounts')
-    .update({
-      oauth_access_token_encrypted: encrypt(accessToken),
-      oauth_token_expires_at: expiresAt,
-    } as never)
-    .eq('id', account.id);
-
-  return accessToken;
-}
-
-/**
- * Get a valid OAuth access token, refreshing if needed.
- */
-async function getOAuthAccessToken(
-  account: EmailAccountRow,
-  supabase: Awaited<ReturnType<typeof createSupabaseAdminClient>>
-): Promise<string> {
-  const accessEnc = account.oauth_access_token_encrypted;
-  const expiresAt = account.oauth_token_expires_at;
-
-  // Check if we have a valid token
-  if (accessEnc) {
-    const now = new Date();
-    const expires = expiresAt ? new Date(expiresAt) : null;
-    // Add 60s buffer
-    if (!expires || expires > new Date(now.getTime() + 60_000)) {
-      try {
-        return decrypt(accessEnc);
-      } catch {
-        // Decryption failed, try refresh
-      }
-    }
-  }
-
-  // Need to refresh
-  return refreshOAuthToken(account, supabase);
-}
-
-/**
  * Send an email via the specified email account.
  * Supports Gmail/Outlook OAuth and custom SMTP.
  */
@@ -150,7 +58,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
     let transport: nodemailer.Transporter;
 
     if (acc.provider === 'gmail') {
-      const accessToken = await getOAuthAccessToken(acc, supabase);
+      const accessToken = await getValidOAuthToken(acc);
       transport = nodemailer.createTransport({
         service: 'gmail',
         auth: {
@@ -162,7 +70,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<SendEmailRes
         },
       });
     } else if (acc.provider === 'outlook') {
-      const accessToken = await getOAuthAccessToken(acc, supabase);
+      const accessToken = await getValidOAuthToken(acc);
       // For Outlook, use SMTP with XOAUTH2
       transport = nodemailer.createTransport({
         host: 'smtp.office365.com',

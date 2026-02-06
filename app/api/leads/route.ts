@@ -41,8 +41,12 @@ export async function GET(request: Request) {
   if (status) query = query.eq('status', status);
 
   if (search && search.length > 0) {
-    const term = `%${search.replace(/%/g, '\\%')}%`;
-    query = query.or(`email.ilike.${term},first_name.ilike.${term},last_name.ilike.${term},company.ilike.${term}`);
+    // Sanitize search term: escape PostgREST special chars to prevent filter injection
+    const sanitized = search.replace(/[%_\\(),."']/g, '');
+    if (sanitized.length > 0) {
+      const term = `%${sanitized}%`;
+      query = query.or(`email.ilike.${term},first_name.ilike.${term},last_name.ilike.${term},company.ilike.${term}`);
+    }
   }
 
   const { data: rows, error, count } = await query.range(offset, offset + limit - 1);

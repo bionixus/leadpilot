@@ -1,5 +1,14 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { z } from 'zod';
+
+const createCampaignSchema = z.object({
+  name: z.string().min(1).max(200),
+  description: z.string().max(2000).optional(),
+  settings: z.record(z.unknown()).optional(),
+  llm_context: z.record(z.unknown()).optional(),
+  email_account_id: z.string().uuid().optional().nullable(),
+});
 
 export async function GET() {
   const supabase = await createServerSupabaseClient();
@@ -30,9 +39,14 @@ export async function POST(request: Request) {
   if (!orgId) return NextResponse.json({ error: 'No org' }, { status: 403 });
 
   const body = await request.json();
+  const parsed = createCampaignSchema.safeParse(body);
+  if (!parsed.success) {
+    return NextResponse.json({ error: 'Validation failed', issues: parsed.error.issues }, { status: 400 });
+  }
+
   const { data, error } = await supabase
     .from('campaigns')
-    .insert({ org_id: orgId, ...body })
+    .insert({ org_id: orgId, ...parsed.data } as never)
     .select()
     .single();
 

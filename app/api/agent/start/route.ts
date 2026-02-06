@@ -1,5 +1,6 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
+import { checkRateLimit } from '@/lib/rate-limit';
 
 // POST - Start agent
 export async function POST() {
@@ -8,6 +9,11 @@ export async function POST() {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+
+  const rl = checkRateLimit(`${user.id}:agent-start`, { windowMs: 60_000, maxRequests: 5 });
+  if (!rl.allowed) {
+    return NextResponse.json({ error: 'Too many requests' }, { status: 429, headers: { 'Retry-After': String(Math.ceil((rl.retryAfterMs || 60000) / 1000)) } });
+  }
 
   const { data: userData } = await supabase
     .from('users')

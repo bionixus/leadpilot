@@ -1,5 +1,6 @@
 import { schedules, task, logger } from '@trigger.dev/sdk/v3';
 import { createClient } from '@supabase/supabase-js';
+import { sendEmail } from '@/lib/email/send';
 
 // Initialize Supabase client for jobs
 const supabase = createClient(
@@ -78,25 +79,20 @@ export const agentOrchestratorTask = schedules.task({
 // PROCESS AGENT TASKS
 // ===========================================
 async function processAgentTasks(agent: any): Promise<number> {
-  // Get pending tasks for this agent
-  const { data: tasks } = await supabase
-    .from('agent_tasks')
-    .select('*')
-    .eq('org_id', agent.org_id)
-    .eq('status', 'pending')
-    .lte('scheduled_for', new Date().toISOString())
-    .order('priority', { ascending: false })
-    .order('created_at', { ascending: true })
-    .limit(5); // Process up to 5 tasks per cycle
+  // Atomically claim pending tasks using FOR UPDATE SKIP LOCKED to prevent
+  // concurrent orchestrator runs from processing the same tasks
+  const { data: tasks, error } = await supabase.rpc('claim_next_agent_task', {
+    p_org_id: agent.org_id,
+    p_limit: 5,
+  });
 
-  if (!tasks || tasks.length === 0) {
+  if (error || !tasks || tasks.length === 0) {
     return 0;
   }
 
-  for (const task of tasks) {
-    // Trigger individual task processing
+  for (const t of tasks) {
     await processAgentTaskTrigger.trigger({
-      task_id: task.id,
+      task_id: t.id,
       org_id: agent.org_id,
       agent_config_id: agent.id,
     });
@@ -130,11 +126,10 @@ async function checkForNewWork(agent: any): Promise<void> {
 
   // Check for follow-ups needed
   const { data: needsFollowUp } = await supabase
-    .from('messages')
+    .from('emails')
     .select('id, lead_id, sequence_id')
     .eq('org_id', agent.org_id)
     .eq('status', 'sent')
-    .is('replied_at', null)
     .lt('sent_at', new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString()) // 3+ days ago
     .limit(10);
 
@@ -414,7 +409,7 @@ async function processSendMessage(task: any, config: any, rules: any[]): Promise
       // Check max follow-ups rule
       if (rule.condition_json?.max_messages) {
         const { count } = await supabase
-          .from('messages')
+          .from('emails')
           .select('*', { count: 'exact', head: true })
           .eq('lead_id', lead_id);
 
@@ -450,7 +445,7 @@ async function processFollowUp(task: any, config: any): Promise<any> {
   // Get lead and previous messages
   const [{ data: lead }, { data: messages }] = await Promise.all([
     supabase.from('leads').select('*').eq('id', lead_id).single(),
-    supabase.from('messages').select('*').eq('lead_id', lead_id).order('created_at', { ascending: false }).limit(5),
+    supabase.from('emails').select('*').eq('lead_id', lead_id).order('created_at', { ascending: false }).limit(5),
   ]);
 
   if (!lead) {
@@ -581,15 +576,17 @@ export const dailyResetTask = schedules.task({
   run: async () => {
     logger.info('Running daily reset...');
 
-    // Reset email send counters
+    // Reset email send counters (only active accounts)
     await supabase
       .from('email_accounts')
-      .update({ emails_sent_today: 0 });
+      .update({ emails_sent_today: 0 })
+      .eq('is_active', true);
 
-    // Reset messaging send counters
+    // Reset messaging send counters (only active accounts)
     await supabase
       .from('messaging_accounts')
-      .update({ messages_sent_today: 0 });
+      .update({ messages_sent_today: 0 })
+      .eq('is_active', true);
 
     // Cleanup old completed tasks (older than 7 days)
     await supabase
@@ -619,54 +616,46 @@ export const sendScheduledMessagesTask = schedules.task({
   run: async () => {
     logger.info('Checking for scheduled messages...');
 
-    // Get due messages
-    const { data: messages } = await supabase
-      .from('messages')
-      .select('*, leads(*), email_accounts(*), messaging_accounts(*)')
+    // Get due emails
+    const { data: scheduledEmails } = await supabase
+      .from('emails')
+      .select('*, leads(*), email_accounts(*)')
       .eq('status', 'scheduled')
       .lte('scheduled_for', new Date().toISOString())
       .limit(50);
 
-    if (!messages || messages.length === 0) {
+    if (!scheduledEmails || scheduledEmails.length === 0) {
       return { sent: 0 };
     }
 
-    logger.info(`Found ${messages.length} messages to send`);
+    logger.info(`Found ${scheduledEmails.length} emails to send`);
 
     let sent = 0;
     let failed = 0;
 
-    for (const message of messages) {
+    for (const message of scheduledEmails) {
       try {
         // Update status to sending
         await supabase
-          .from('messages')
+          .from('emails')
           .update({ status: 'sending' })
           .eq('id', message.id);
 
-        // Send based on channel
-        let result;
-        if (message.channel === 'email') {
-          result = await sendEmailMessage(message);
-        } else if (message.channel === 'whatsapp' || message.channel === 'sms') {
-          result = await sendMessagingMessage(message);
-        }
+        const result = await sendEmailMessage(message);
 
         if (result?.success) {
           await supabase
-            .from('messages')
+            .from('emails')
             .update({
               status: 'sent',
               sent_at: new Date().toISOString(),
-              provider_message_id: result.messageId,
+              message_id: result.messageId,
             })
             .eq('id', message.id);
 
           // Update counters
-          if (message.channel === 'email' && message.email_account_id) {
+          if (message.email_account_id) {
             await supabase.rpc('increment_emails_sent', { account_id: message.email_account_id });
-          } else if (message.messaging_account_id) {
-            await supabase.rpc('increment_messages_sent', { account_id: message.messaging_account_id });
           }
 
           sent++;
@@ -674,14 +663,12 @@ export const sendScheduledMessagesTask = schedules.task({
           throw new Error(result?.error || 'Unknown error');
         }
       } catch (err: any) {
-        logger.error(`Failed to send message ${message.id}`, { error: err.message });
+        logger.error(`Failed to send email ${message.id}`, { error: err.message });
 
         await supabase
-          .from('messages')
+          .from('emails')
           .update({
             status: 'failed',
-            error_message: err.message,
-            retry_count: (message.retry_count || 0) + 1,
           })
           .eq('id', message.id);
 
@@ -689,17 +676,29 @@ export const sendScheduledMessagesTask = schedules.task({
       }
     }
 
-    return { sent, failed, total: messages.length };
+    return { sent, failed, total: scheduledEmails.length };
   },
 });
 
 async function sendEmailMessage(message: any): Promise<any> {
-  // Implement actual email sending
-  // This would use nodemailer with the account credentials
-  return { success: true, messageId: `email-${Date.now()}` };
-}
+  if (!message.email_account_id) {
+    return { success: false, error: 'No email account configured' };
+  }
 
-async function sendMessagingMessage(message: any): Promise<any> {
-  // Implement actual WhatsApp/SMS sending via Twilio
-  return { success: true, messageId: `msg-${Date.now()}` };
+  const lead = message.leads;
+  if (!lead?.email) {
+    return { success: false, error: 'No lead email address' };
+  }
+
+  const result = await sendEmail({
+    accountId: message.email_account_id,
+    to: lead.email,
+    subject: message.subject || '',
+    bodyText: message.body || '',
+    messageId: message.message_id || undefined,
+    inReplyTo: message.in_reply_to || undefined,
+    references: message.references || undefined,
+  });
+
+  return result;
 }

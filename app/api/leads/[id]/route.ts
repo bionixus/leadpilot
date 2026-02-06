@@ -1,6 +1,5 @@
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 import { NextResponse } from 'next/server';
-import type { UpdateTables } from '@/types/database';
 
 export async function GET(
   _request: Request,
@@ -25,8 +24,8 @@ export async function PATCH(
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
-  const body = await request.json() as UpdateTables<'leads'>;
-  const { data, error } = await supabase.from('leads').update(body).eq('id', id).select().single();
+  const body = await request.json();
+  const { data, error } = await supabase.from('leads').update(body as Record<string, unknown>).eq('id', id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
 }

@@ -160,7 +160,7 @@ export function canSendNow(account: {
   if (account.warmup_enabled) {
     // Warmup schedule: start at 10/day, increase by ~10/day
     // Day 1: 10, Day 2: 20, Day 3: 30, ... Day 10: 100, etc.
-    const warmupLimit = Math.min(10 + (account.warmup_day - 1) * 10, account.daily_send_limit);
+    const warmupLimit = Math.min(10 * Math.max(1, account.warmup_day), account.daily_send_limit);
     effectiveLimit = Math.min(effectiveLimit, warmupLimit);
   }
 

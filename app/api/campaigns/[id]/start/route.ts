@@ -119,6 +119,8 @@ export async function POST(
     body_text: string;
     body_html: string | null;
     message_id: string;
+    in_reply_to: string | null;
+    references: string | null;
     scheduled_for: string;
     status: string;
   }> = [];
@@ -138,6 +140,7 @@ export async function POST(
     });
 
     let prevMessageId: string | null = null;
+    const threadMessageIds: string[] = [];
 
     for (const email of scheduled) {
       const msgId = generateMessageId();
@@ -152,10 +155,13 @@ export async function POST(
         body_text: email.body,
         body_html: null, // Plain text for now
         message_id: msgId,
+        in_reply_to: prevMessageId,
+        references: threadMessageIds.length > 0 ? threadMessageIds.join(' ') : null,
         scheduled_for: email.scheduledFor.toISOString(),
         status: 'scheduled',
       });
 
+      threadMessageIds.push(msgId);
       prevMessageId = msgId;
     }
 

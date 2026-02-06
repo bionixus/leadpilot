@@ -46,18 +46,18 @@ export class AgentToolsManager {
           return { success: false, error: 'Lead has no email address' };
         }
 
-        // Create message record
+        // Create email record
         const { data: message, error } = await this.supabase
-          .from('messages')
+          .from('emails')
           .insert({
             org_id: this.orgId,
             lead_id,
             email_account_id,
-            channel: 'email',
-            direction: 'outbound',
             subject,
             body,
-            status: 'queued',
+            step: 1,
+            status: 'scheduled',
+            scheduled_for: new Date().toISOString(),
           } as never)
           .select()
           .single();
@@ -101,16 +101,17 @@ export class AgentToolsManager {
           return { success: false, error: 'Lead has no WhatsApp number' };
         }
 
+        // TODO: WhatsApp messaging requires a dedicated messages table or
+        // integration with Twilio. For now, log the outbound attempt via inbox_messages.
         const { data: message, error } = await this.supabase
-          .from('messages')
+          .from('inbox_messages')
           .insert({
             org_id: this.orgId,
             lead_id,
-            messaging_account_id,
-            channel: 'whatsapp',
             direction: 'outbound',
-            body,
-            status: 'queued',
+            from_email: 'whatsapp',
+            to_email: phone,
+            body_text: body,
           } as never)
           .select()
           .single();
@@ -153,16 +154,17 @@ export class AgentToolsManager {
           return { success: false, error: 'Lead has no phone number' };
         }
 
+        // TODO: SMS messaging requires a dedicated messages table or
+        // integration with Twilio. For now, log the outbound attempt via inbox_messages.
         const { data: message, error } = await this.supabase
-          .from('messages')
+          .from('inbox_messages')
           .insert({
             org_id: this.orgId,
             lead_id,
-            messaging_account_id,
-            channel: 'sms',
             direction: 'outbound',
-            body,
-            status: 'queued',
+            from_email: 'sms',
+            to_email: lead.phone,
+            body_text: body,
           } as never)
           .select()
           .single();
