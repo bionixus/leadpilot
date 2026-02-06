@@ -7,17 +7,7 @@ const authRoutes = ['/login', '/signup'];
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // IMPORTANT: Allow root path (/) immediately - no auth check needed for marketing page
-  if (pathname === '/') {
-    return NextResponse.next();
-  }
-  
-  // Allow other public auth-related routes without requiring login
-  if (pathname === '/forgot-password' || pathname === '/reset-password') {
-    return NextResponse.next();
-  }
-
-  // Create response for routes that need session handling
+  // Create response
   const response = NextResponse.next({
     request: {
       headers: request.headers,
@@ -29,7 +19,6 @@ export async function middleware(request: NextRequest) {
   const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   
   if (!url || !key) {
-    // Supabase not configured, allow all requests
     return response;
   }
 
@@ -60,16 +49,14 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
-    // For all other routes (protected), redirect to login if not authenticated
+    // For protected routes, redirect to login if not authenticated
     if (!user) {
-      const loginUrl = new URL('/login', request.url);
-      return NextResponse.redirect(loginUrl);
+      return NextResponse.redirect(new URL('/login', request.url));
     }
 
     return response;
   } catch {
-    // On any error, allow the request to proceed
-    // The page-level auth checks will handle it
+    // On error, allow request - page-level auth will handle it
     return response;
   }
 }
@@ -77,13 +64,21 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     * - public files (public folder)
-     * - api routes
+     * Match specific paths that need middleware processing.
+     * Exclude: static files, api routes, and public pages.
      */
-    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$|api).*)',
+    '/campaigns/:path*',
+    '/leads/:path*',
+    '/inbox/:path*',
+    '/sequences/:path*',
+    '/email-accounts/:path*',
+    '/settings/:path*',
+    '/agent/:path*',
+    '/autopilot/:path*',
+    '/analytics/:path*',
+    '/scraping/:path*',
+    '/messaging/:path*',
+    '/login',
+    '/signup',
   ],
 };
