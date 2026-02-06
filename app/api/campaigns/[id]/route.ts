@@ -25,7 +25,6 @@ export async function PATCH(
   if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 
   const body = await request.json();
-  // @ts-expect-error Supabase generated types can infer 'never' for update payload
   const { data, error } = await supabase.from('campaigns').update(body).eq('id', id).select().single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json(data);
