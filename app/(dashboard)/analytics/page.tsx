@@ -7,7 +7,7 @@ export const metadata = { title: 'Analytics | LeadPilot' };
 export default async function AnalyticsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user) redirect('/app');
 
   const { data: userRow } = await supabase
     .from('users')
@@ -16,7 +16,7 @@ export default async function AnalyticsPage() {
     .single();
 
   const orgId = (userRow as { org_id?: string | null } | null)?.org_id;
-  if (!orgId) redirect('/login');
+  if (!orgId) redirect('/app');
 
   return (
     <div className="p-6">

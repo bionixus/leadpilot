@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(`${baseUrl}/login`);
+  if (!user) return NextResponse.redirect(`${baseUrl}/app`);
 
   const { data: userRow } = await supabase.from('users').select('org_id').eq('auth_id', user.id).single();
   const orgId = (userRow as { org_id?: string | null } | null)?.org_id;

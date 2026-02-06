@@ -14,7 +14,7 @@ export default async function LeadsPage({ searchParams }: { searchParams: Search
   const params = await searchParams;
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user) redirect('/app');
 
   const { data: userRow } = await supabase.from('users').select('org_id').eq('auth_id', user.id).single();
   const orgId = (userRow as { org_id?: string | null } | null)?.org_id;

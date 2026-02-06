@@ -83,7 +83,7 @@ async function getValidAccessToken(account: EmailAccountForFetch): Promise<strin
   const tokenUrl =
     account.provider === 'gmail'
       ? 'https://oauth2.googleapis.com/token'
-      : 'https://login.microsoftonline.com/common/oauth2/v2.0/token';
+      : 'https://app.microsoftonline.com/common/oauth2/v2.0/token';
 
   const res = await fetch(tokenUrl, {
     method: 'POST',

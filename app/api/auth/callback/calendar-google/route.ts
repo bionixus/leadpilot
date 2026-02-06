@@ -26,7 +26,7 @@ export async function GET(request: Request) {
     const { data: { user } } = await supabase.auth.getUser();
     
     if (!user) {
-      return NextResponse.redirect(`${origin}/login`);
+      return NextResponse.redirect(`${origin}/app`);
     }
 
     const { data: userData } = await supabase

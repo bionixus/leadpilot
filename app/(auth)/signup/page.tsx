@@ -1,5 +1,5 @@
 import { redirect } from 'next/navigation';
-import { SignUpForm } from '../login/SignUpForm';
+import { SignUpForm } from '../app/SignUpForm';
 import { createServerSupabaseClient } from '@/lib/supabase/server';
 
 export const metadata = { title: 'Sign up | LeadPilot' };

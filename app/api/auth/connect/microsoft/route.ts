@@ -6,7 +6,7 @@ const MS_SCOPES = ['openid', 'email', 'profile', 'https://graph.microsoft.com/Ma
 export async function GET(request: Request) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(new URL('/login', request.url));
+  if (!user) return NextResponse.redirect(new URL('/app', request.url));
 
   const clientId = process.env.MICROSOFT_CLIENT_ID;
   if (!clientId) return NextResponse.redirect(new URL('/email-accounts?error=missing_microsoft_config', request.url));
@@ -23,6 +23,6 @@ export async function GET(request: Request) {
     state,
   });
 
-  const url = `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
+  const url = `https://app.microsoftonline.com/common/oauth2/v2.0/authorize?${params.toString()}`;
   return NextResponse.redirect(url);
 }

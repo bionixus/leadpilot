@@ -72,7 +72,7 @@ export function SignUpForm() {
           Check your email for a confirmation link to activate your account.
         </p>
         <p className="text-xs text-gray-400">
-          Already confirmed? <Link href="/login" className="text-primary hover:underline">Sign in</Link>
+          Already confirmed? <Link href="/app" className="text-primary hover:underline">Sign in</Link>
         </p>
       </div>
     );
@@ -172,7 +172,7 @@ export function SignUpForm() {
         {loading ? 'Creating account…' : 'Create account'}
       </button>
       <p className="text-xs text-gray-400 text-center">
-        Already have an account? <Link href="/login" className="text-primary hover:underline">Sign in</Link>
+        Already have an account? <Link href="/app" className="text-primary hover:underline">Sign in</Link>
       </p>
     </form>
   );

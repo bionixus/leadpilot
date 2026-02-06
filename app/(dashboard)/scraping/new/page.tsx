@@ -9,7 +9,7 @@ export const metadata = { title: 'New Scraping Job | LeadPilot' };
 export default async function NewScrapingPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user) redirect('/app');
 
   const { data: userRow } = await supabase
     .from('users')
@@ -18,7 +18,7 @@ export default async function NewScrapingPage() {
     .single();
 
   const orgId = (userRow as { org_id?: string | null } | null)?.org_id;
-  if (!orgId) redirect('/login');
+  if (!orgId) redirect('/app');
 
   // Fetch campaigns for the dropdown
   const { data: campaigns } = await supabase

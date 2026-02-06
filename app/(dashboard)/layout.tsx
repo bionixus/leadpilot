@@ -37,10 +37,10 @@ export default async function DashboardLayout({
       userData = data as UserData;
     }
   } catch {
-    redirect('/login');
+    redirect('/app');
   }
 
-  if (!user) redirect('/login');
+  if (!user) redirect('/app');
 
   return (
     <div className="min-h-screen bg-gray-50 flex">

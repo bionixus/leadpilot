@@ -30,7 +30,7 @@ export default async function ScrapingPage({
 }) {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user) redirect('/app');
 
   const { data: userRow } = await supabase
     .from('users')
@@ -39,7 +39,7 @@ export default async function ScrapingPage({
     .single();
 
   const orgId = (userRow as { org_id?: string | null } | null)?.org_id;
-  if (!orgId) redirect('/login');
+  if (!orgId) redirect('/app');
 
   const params = await searchParams;
   const statusFilter = typeof params.status === 'string' ? params.status : null;

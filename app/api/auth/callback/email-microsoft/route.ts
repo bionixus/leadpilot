@@ -14,7 +14,7 @@ export async function GET(request: Request) {
 
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return NextResponse.redirect(`${baseUrl}/login`);
+  if (!user) return NextResponse.redirect(`${baseUrl}/app`);
 
   const { data: userRow } = await supabase.from('users').select('org_id').eq('auth_id', user.id).single();
   const orgId = (userRow as { org_id?: string | null } | null)?.org_id;
@@ -25,7 +25,7 @@ export async function GET(request: Request) {
   if (!clientId || !clientSecret) return NextResponse.redirect(`${redirectBase}?error=missing_config`);
 
   const redirectUri = `${baseUrl}/api/auth/callback/email-microsoft`;
-  const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+  const tokenRes = await fetch('https://app.microsoftonline.com/common/oauth2/v2.0/token', {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     body: new URLSearchParams({

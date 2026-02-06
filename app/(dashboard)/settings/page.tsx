@@ -18,7 +18,7 @@ type OrgRow = {
 export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient();
   const { data: { user } } = await supabase.auth.getUser();
-  if (!user) redirect('/login');
+  if (!user) redirect('/app');
 
   const { data: userRow } = await supabase
     .from('users')

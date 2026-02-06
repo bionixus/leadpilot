@@ -69,7 +69,7 @@ export function ResetPasswordForm() {
       // Sign out and redirect to login after a delay
       setTimeout(async () => {
         await supabase.auth.signOut();
-        router.push('/login?reset=success');
+        router.push('/app?reset=success');
       }, 2000);
     } catch {
       setError('Something went wrong. Please try again.');

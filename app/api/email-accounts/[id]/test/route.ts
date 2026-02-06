@@ -127,7 +127,7 @@ export async function POST(
               .eq('id', id);
           }
         } else {
-          const tokenRes = await fetch('https://login.microsoftonline.com/common/oauth2/v2.0/token', {
+          const tokenRes = await fetch('https://app.microsoftonline.com/common/oauth2/v2.0/token', {
             method: 'POST',
             headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
             body: new URLSearchParams({

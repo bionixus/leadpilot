@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
 // Auth routes - redirect to dashboard if already logged in
-const authRoutes = ['/login', '/signup'];
+const authRoutes = ['/app', '/signup'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -51,7 +51,7 @@ export async function middleware(request: NextRequest) {
 
     // For protected routes, redirect to login if not authenticated
     if (!user) {
-      return NextResponse.redirect(new URL('/login', request.url));
+      return NextResponse.redirect(new URL('/app', request.url));
     }
 
     return response;
@@ -78,7 +78,7 @@ export const config = {
     '/analytics/:path*',
     '/scraping/:path*',
     '/messaging/:path*',
-    '/login',
+    '/app',
     '/signup',
   ],
 };

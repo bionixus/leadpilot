@@ -13,7 +13,7 @@ export async function GET(request: NextRequest) {
   const next = searchParams.get('next') ?? '/campaigns';
 
   const baseUrl = request.nextUrl.origin;
-  const loginUrl = new URL('/login', baseUrl);
+  const loginUrl = new URL('/app', baseUrl);
   const redirectUrl = new URL(next, baseUrl);
 
   if (!code) {
