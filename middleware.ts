@@ -1,17 +1,24 @@
 import { createServerClient } from '@supabase/ssr';
 import { type NextRequest, NextResponse } from 'next/server';
 
-// Public routes that don't require authentication
-const publicRoutes = ['/', '/login', '/signup', '/forgot-password', '/reset-password'];
-
 // Auth routes - redirect to dashboard if already logged in
 const authRoutes = ['/login', '/signup'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  // Create response
-  let response = NextResponse.next({
+  // IMPORTANT: Allow root path (/) immediately - no auth check needed for marketing page
+  if (pathname === '/') {
+    return NextResponse.next();
+  }
+  
+  // Allow other public auth-related routes without requiring login
+  if (pathname === '/forgot-password' || pathname === '/reset-password') {
+    return NextResponse.next();
+  }
+
+  // Create response for routes that need session handling
+  const response = NextResponse.next({
     request: {
       headers: request.headers,
     },
@@ -26,47 +33,45 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Create Supabase client
-  const supabase = createServerClient(url, key, {
-    cookies: {
-      getAll() {
-        return request.cookies.getAll();
+  try {
+    // Create Supabase client
+    const supabase = createServerClient(url, key, {
+      cookies: {
+        getAll() {
+          return request.cookies.getAll();
+        },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => {
+            request.cookies.set(name, value);
+            response.cookies.set(name, value, options);
+          });
+        },
       },
-      setAll(cookiesToSet) {
-        cookiesToSet.forEach(({ name, value, options }) => {
-          request.cookies.set(name, value);
-          response.cookies.set(name, value, options);
-        });
-      },
-    },
-  });
+    });
 
-  // Refresh session
-  const { data: { user } } = await supabase.auth.getUser();
+    // Get user session
+    const { data: { user } } = await supabase.auth.getUser();
 
-  // For root path (/), always show marketing page (no redirect)
-  if (pathname === '/') {
+    // For auth routes (login, signup), redirect to dashboard if already logged in
+    if (authRoutes.includes(pathname)) {
+      if (user) {
+        return NextResponse.redirect(new URL('/campaigns', request.url));
+      }
+      return response;
+    }
+
+    // For all other routes (protected), redirect to login if not authenticated
+    if (!user) {
+      const loginUrl = new URL('/login', request.url);
+      return NextResponse.redirect(loginUrl);
+    }
+
+    return response;
+  } catch {
+    // On any error, allow the request to proceed
+    // The page-level auth checks will handle it
     return response;
   }
-
-  // For auth routes (login, signup), redirect to dashboard if already logged in
-  if (authRoutes.includes(pathname) && user) {
-    return NextResponse.redirect(new URL('/campaigns', request.url));
-  }
-
-  // For other public routes, allow access
-  if (publicRoutes.includes(pathname)) {
-    return response;
-  }
-
-  // For protected routes, redirect to login if not authenticated
-  if (!user) {
-    const loginUrl = new URL('/login', request.url);
-    loginUrl.searchParams.set('redirect', pathname);
-    return NextResponse.redirect(loginUrl);
-  }
-
-  return response;
 }
 
 export const config = {
